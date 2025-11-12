@@ -1,11 +1,12 @@
 package com.me2u.gateway.controller;
 
-import com.me2u.gateway.controller.dto.ApiErrorResponseDto;
-import com.me2u.gateway.controller.utils.Utils;
+import com.me2u.gateway.util.AppUtil;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
@@ -22,16 +23,18 @@ public class FallbackController {
   }
 
   @GetMapping("/auth")
-  public Mono<ResponseEntity<ApiErrorResponseDto>> authFallback(ServerWebExchange exchange) {
-
+  @PostMapping("/auth")
+  public Mono<ResponseEntity<ProblemDetail>> authFallback(ServerWebExchange exchange) {
     String message =
         messageSource.getMessage(
             "auth.service.down",
-            new Object[] {"Authentification"},
-            Utils.getDefaultLocale(exchange));
+            new Object[] {"Authentication"},
+            AppUtil.getDefaultLocale(exchange));
 
-    ApiErrorResponseDto body =
-        new ApiErrorResponseDto(HttpStatus.SERVICE_UNAVAILABLE.value(), message);
-    return Mono.just(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body));
+    ProblemDetail problemDetail = ProblemDetail.forStatus(HttpStatus.SERVICE_UNAVAILABLE);
+    problemDetail.setTitle("Service Unavailable");
+    problemDetail.setDetail(message);
+
+    return Mono.just(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problemDetail));
   }
 }
