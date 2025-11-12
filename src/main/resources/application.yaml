@@ -1,11 +1,14 @@
 server:
-  port: ${PORT:8080}
+  port: ${PORT:8090}
 spring:
   application:
     name: gateway
   main:
     web-application-type: reactive
   thread-executor: virtual
+  web:
+    resources:
+      add-mappings: false
 
   messages:
     basename: messages
@@ -13,17 +16,18 @@ spring:
     fallback-to-system-locale: false
     default-locale: en
 
-
   # Routes definition for services
   cloud:
     gateway:
       server:
         webflux:
           globalcors:
-            add-to-simple-url-handler-mapping: true
-            cors-configuration:
+            cors-configurations:
               '[/**]':
-                allowedOrigins: "*"
+                allowedOrigins:
+                  - "https://localhost:3000" # FE DOMAIN
+                  - "https://admin.admindomain.com" # OTHER DOMAINS
+                allowedCredentials: true
                 allowedHeaders: "*"
                 allowedMethods:
                   - GET
@@ -38,9 +42,9 @@ spring:
             # --Opened routes--
             # AUTH SERVICE
             - id: auth_service_opened
-              uri: ${AUTH_SERVICE_URI:http://localhost:8081}
+              uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
-                - Path=/api/v1/auth/register,/api/v1/auth/send/code,/api/v1/auth/admin/register,/api/v1/auth/admin/authenticate,/api/v1/auth/admin/send/link,/api/v1/auth/admin/password,/api/v1/auth/admin/refresh-token
+                - Path=/api/v1/auth/magic-link, /api/v1/auth/magic-link/verify, /api/v1/auth/refresh
                 - Method=POST,GET
               filters:
                 - name: CircuitBreaker
@@ -48,14 +52,14 @@ spring:
                     name: authOpenCircuitBreaker
                     fallbackUri: forward:/fallback/auth
 
-              # --Protected routes--
-              # AUTH SERVICE
+            # --Protected routes--
+            # AUTH SERVICE
             - id: auth_service_protected
-              uri: ${AUTH_SERVICE_URI:http://localhost:8081}
+              uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
-                - Path=/auth/**
+                - Path=/api/v1/auth/logout, /api/v1/auth/refresh
               filters:
-                - PrefixPath=/api
+                - Authentication  # Custom JWT validation filter (matches AuthenticationGatewayFilterFactory)
                 - name: AddResponseHeader
                   args:
                     name: X-Powered-By
@@ -65,13 +69,24 @@ spring:
                     name: authCircuitBreaker
                     fallbackUri: forward:/fallback/auth
 
-resilience4j.circuitbreaker:
-  instances:
-    authCircuitBreaker:
-      registerHealthIndicator: true
-      slidingWindowSize: 10
-      minimumNumberOfCalls: 5
-      permittedNumberOfCallsInHalfOpenState: 3
-      waitDurationInOpenState: 10s
-      failureRateThreshold: 50
-      eventConsumerBufferSize: 10
+resilience4j:
+  circuitbreaker:
+    instances:
+      authCircuitBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+
+jwt:
+  secret: ${JWT_SECRET:}
+
+logging:
+  level:
+    # Show which route predicate matches and the final route selected
+    org.springframework.cloud.gateway.handler.RoutePredicateHandlerMapping: DEBUG
+    # Show circuit breaker state transitions and call outcomes
+    io.github.resilience4j.circuitbreaker.internal.CircuitBreakerStateMachine: DEBUG
