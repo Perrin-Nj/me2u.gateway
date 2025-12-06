@@ -1,0 +1,27 @@
+name: Deploy Gateway Service
+
+on:
+  push:
+    branches:
+      - deploy
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 24
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '24'
+          cache: 'gradle'
+
+      - name: Grant execute permission
+        run: chmod +x ./gradlew
+
+      - name: Run tests
+        run: ./gradlew test
+
