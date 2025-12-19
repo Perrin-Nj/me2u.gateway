@@ -82,7 +82,7 @@ resilience4j:
         eventConsumerBufferSize: 10
 
 jwt:
-  secret: ${JWT_SECRET:***REMOVED_SECRET***}
+  secret: ${JWT_SECRET}
 
 logging:
   level:
