@@ -90,3 +90,12 @@ logging:
     org.springframework.cloud.gateway.handler.RoutePredicateHandlerMapping: DEBUG
     # Show circuit breaker state transitions and call outcomes
     io.github.resilience4j.circuitbreaker.internal.CircuitBreakerStateMachine: DEBUG
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
