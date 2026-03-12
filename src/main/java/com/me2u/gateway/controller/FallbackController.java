@@ -1,45 +1,34 @@
 package com.me2u.gateway.controller;
 
 import com.me2u.gateway.util.AppUtil;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/fallback")
 public class FallbackController {
 
   private final MessageSource messageSource;
 
-  @RequestMapping(value = "/auth", method = {RequestMethod.GET, RequestMethod.POST})
+  public FallbackController(MessageSource messageSource) {
+    this.messageSource = messageSource;
+  }
+
+  @GetMapping("/auth")
+  @PostMapping("/auth")
   public Mono<ResponseEntity<ProblemDetail>> authFallback(ServerWebExchange exchange) {
-    return buildFallback(exchange, "auth.service.down", "Authentication");
-  }
-
-  @RequestMapping(value = "/shipment", method = {RequestMethod.GET, RequestMethod.POST})
-  public Mono<ResponseEntity<ProblemDetail>> shipmentFallback(ServerWebExchange exchange) {
-    return buildFallback(exchange, "shipment.service.down", "Shipment");
-  }
-
-
-  @RequestMapping(value = "/notification", method = {RequestMethod.GET, RequestMethod.POST})
-  public Mono<ResponseEntity<ProblemDetail>> notificationFallback(ServerWebExchange exchange) {
-    return buildFallback(exchange, "notification.service.down", "Notification");
-  }
-
-
-  private Mono<ResponseEntity<ProblemDetail>> buildFallback(
-          ServerWebExchange exchange, String messageKey, String serviceName) {
-
-    String message = messageSource.getMessage(
-            messageKey,
-            new Object[]{serviceName},
+    String message =
+        messageSource.getMessage(
+            "auth.service.down",
+            new Object[] {"Authentication"},
             AppUtil.getDefaultLocale(exchange));
 
     ProblemDetail problemDetail = ProblemDetail.forStatus(HttpStatus.SERVICE_UNAVAILABLE);
