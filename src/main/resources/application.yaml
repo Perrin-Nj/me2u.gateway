@@ -1,6 +1,5 @@
 server:
   port: ${PORT:8090}
-
 spring:
   application:
     name: gateway
@@ -17,11 +16,7 @@ spring:
     fallback-to-system-locale: false
     default-locale: en
 
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-
+  # Routes definition for services
   cloud:
     gateway:
       server:
@@ -30,8 +25,8 @@ spring:
             cors-configurations:
               '[/**]':
                 allowedOrigins:
-                  - "https://localhost:3000"
-                  - "https://admin.admindomain.com"
+                  - "https://localhost:3000" # FE DOMAIN
+                  - "https://admin.admindomain.com" # OTHER DOMAINS
                 allowedCredentials: true
                 allowedHeaders: "*"
                 allowedMethods:
@@ -44,56 +39,27 @@ spring:
                   - PATCH
                   - TRACE
           routes:
-
-            # ── AUTH SERVICE — routes ouvertes ──────────────────
+            # --Opened routes--
+            # AUTH SERVICE
             - id: auth_service_opened
               uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
                 - Path=/api/v1/auth/magic-link, /api/v1/auth/magic-link/verify, /api/v1/auth/refresh
                 - Method=POST,GET
               filters:
-                - Logging
-                - name: RequestRateLimiter
-                  args:
-                    redis-rate-limiter.replenishRate: 20
-                    redis-rate-limiter.burstCapacity: 40
-                    key-resolver: "#{@ipKeyResolver}"
-                - name: Retry
-                  args:
-                    retries: 3
-                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
-                    methods: GET, POST
-                    backoff:
-                      firstBackoff: 100ms
-                      maxBackoff: 500ms
-                      factor: 2
                 - name: CircuitBreaker
                   args:
                     name: authOpenCircuitBreaker
                     fallbackUri: forward:/fallback/auth
 
-            # ── AUTH SERVICE — routes protégées ─────────────────
+            # --Protected routes--
+            # AUTH SERVICE
             - id: auth_service_protected
               uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
                 - Path=/api/v1/auth/logout, /api/v1/auth/refresh
               filters:
-                - Logging
-                - Authentication
-                - name: RequestRateLimiter
-                  args:
-                    redis-rate-limiter.replenishRate: 20
-                    redis-rate-limiter.burstCapacity: 40
-                    key-resolver: "#{@ipKeyResolver}"
-                - name: Retry
-                  args:
-                    retries: 3
-                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
-                    methods: GET
-                    backoff:
-                      firstBackoff: 100ms
-                      maxBackoff: 500ms
-                      factor: 2
+                - Authentication  # Custom JWT validation filter (matches AuthenticationGatewayFilterFactory)
                 - name: AddResponseHeader
                   args:
                     name: X-Powered-By
@@ -103,79 +69,9 @@ spring:
                     name: authCircuitBreaker
                     fallbackUri: forward:/fallback/auth
 
-            # ── SHIPMENT SERVICE ─────────────────────────────────
-            - id: shipment_service
-              uri: ${SHIPMENT_SERVICE_URI:http://localhost:8083}
-              predicates:
-                - Path=/api/shipments/**, /api/moderator/shipments
-              filters:
-                - Logging
-                - Authentication
-                - name: RequestRateLimiter
-                  args:
-                    redis-rate-limiter.replenishRate: 30
-                    redis-rate-limiter.burstCapacity: 60
-                    key-resolver: "#{@ipKeyResolver}"
-                - name: Retry
-                  args:
-                    retries: 3
-                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
-                    methods: GET
-                    backoff:
-                      firstBackoff: 100ms
-                      maxBackoff: 500ms
-                      factor: 2
-                - name: AddResponseHeader
-                  args:
-                    name: X-Powered-By
-                    value: me2u Gateway Service
-                - name: CircuitBreaker
-                  args:
-                    name: shipmentCircuitBreaker
-                    fallbackUri: forward:/fallback/shipment
-
-            # ── NOTIFICATION SERVICE ──────────────────────────────
-            - id: notification_service
-              uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8081}
-              predicates:
-                - Path=/api/notifications/**, /api/templates/**
-              filters:
-                - Logging
-                - Authentication
-                - name: RequestRateLimiter
-                  args:
-                    redis-rate-limiter.replenishRate: 30
-                    redis-rate-limiter.burstCapacity: 60
-                    key-resolver: "#{@ipKeyResolver}"
-                - name: Retry
-                  args:
-                    retries: 3
-                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
-                    methods: GET
-                    backoff:
-                      firstBackoff: 100ms
-                      maxBackoff: 500ms
-                      factor: 2
-                - name: AddResponseHeader
-                  args:
-                    name: X-Powered-By
-                    value: me2u Gateway Service
-                - name: CircuitBreaker
-                  args:
-                    name: notificationCircuitBreaker
-                    fallbackUri: forward:/fallback/notification
-
 resilience4j:
   circuitbreaker:
     instances:
-      authOpenCircuitBreaker:
-        registerHealthIndicator: true
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 10s
-        failureRateThreshold: 50
-        eventConsumerBufferSize: 10
       authCircuitBreaker:
         registerHealthIndicator: true
         slidingWindowSize: 10
@@ -184,39 +80,16 @@ resilience4j:
         waitDurationInOpenState: 10s
         failureRateThreshold: 50
         eventConsumerBufferSize: 10
-      shipmentCircuitBreaker:
-        registerHealthIndicator: true
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 10s
-        failureRateThreshold: 50
-        eventConsumerBufferSize: 10
-      notificationCircuitBreaker:
-        registerHealthIndicator: true
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 10s
-        failureRateThreshold: 50
-        eventConsumerBufferSize: 10
-  retry:
-    instances:
-      default:
-        maxAttempts: 3
-        waitDuration: 100ms
-        enableExponentialBackoff: true
-        exponentialBackoffMultiplier: 2
 
 jwt:
-  secret: ${JWT_SECRET:***REMOVED_SECRET***}
+  secret: ${JWT_SECRET}
 
 logging:
   level:
+    # Show which route predicate matches and the final route selected
     org.springframework.cloud.gateway.handler.RoutePredicateHandlerMapping: DEBUG
+    # Show circuit breaker state transitions and call outcomes
     io.github.resilience4j.circuitbreaker.internal.CircuitBreakerStateMachine: DEBUG
-    com.me2u.gateway.filter: DEBUG
-
 management:
   endpoints:
     web:
