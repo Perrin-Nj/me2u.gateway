@@ -44,8 +44,8 @@ spring:
             cors-configurations:
               '[/**]':
                 allowedOrigins:
-                  - "https://localhost:3000"
-                  - "https://admin.admindomain.com"
+                  - "https://localhost:3000" # FE DOMAIN
+                  - "https://admin.admindomain.com" # OTHER DOMAINS
                 allowedCredentials: true
                 allowedHeaders: "*"
                 allowedMethods:
@@ -79,7 +79,7 @@ spring:
                 - Path=/api-docs/notification
               filters:
                 - RewritePath=/api-docs/notification, /v3/api-docs
-            # ── AUTH SERVICE — routes ouvertes ──────────────────
+            # ── AUTH SERVICE — opened routes ──────────────────
             - id: auth_service_opened
               uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
@@ -106,7 +106,7 @@ spring:
                     name: authOpenCircuitBreaker
                     fallbackUri: forward:/fallback/auth
 
-            # ── AUTH SERVICE — routes protégées ─────────────────
+            # ── AUTH SERVICE — protected routes ─────────────────
             - id: auth_service_protected
               uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
@@ -224,14 +224,14 @@ resilience4j:
         minimumNumberOfCalls: 5
         permittedNumberOfCallsInHalfOpenState: 3
         waitDurationInOpenState: 10s
-        failureRateThreshold: 50
+        failureRateThreshold: 80
         eventConsumerBufferSize: 10
       notificationCircuitBreaker:
         registerHealthIndicator: true
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
         permittedNumberOfCallsInHalfOpenState: 3
-        waitDurationInOpenState: 10s
+        waitDurationInOpenState: 5s
         failureRateThreshold: 50
         eventConsumerBufferSize: 10
   retry:
