@@ -43,7 +43,8 @@ spring:
           globalcors:
             cors-configurations:
               '[/**]':
-                allowedOrigins:
+                allowedOriginPatterns:
+                  - "http://localhost:[*]"
                   - "https://localhost:3000"
                   - "https://admin.admindomain.com"
                 allowedCredentials: true
@@ -60,21 +61,21 @@ spring:
           routes:
             # ──SWAGGER ──────────────────
             - id: swagger_auth
-              uri: http://localhost:8085
+              uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
                 - Path=/api-docs/auth
               filters:
                 - RewritePath=/api-docs/auth, /v3/api-docs
 
             - id: swagger_shipment
-              uri: http://localhost:8083
+              uri: ${SHIPMENT_SERVICE_URI:http://localhost:8083}
               predicates:
                 - Path=/api-docs/shipment
               filters:
                 - RewritePath=/api-docs/shipment, /v3/api-docs
 
             - id: swagger_notification
-              uri: http://localhost:8087
+              uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8087}
               predicates:
                 - Path=/api-docs/notification
               filters:
@@ -141,7 +142,7 @@ spring:
             - id: shipment_service
               uri: ${SHIPMENT_SERVICE_URI:http://localhost:8083}
               predicates:
-                - Path=/api/shipments/**, /api/moderator/shipments
+                - Path=/api/shipments/**, /api/moderator/shipments/**
               filters:
                 - Logging
                 - Authentication
@@ -167,6 +168,14 @@ spring:
                   args:
                     name: shipmentCircuitBreaker
                     fallbackUri: forward:/fallback/shipment
+
+            # WebSocket ROUTE
+            - id: shipment-service-ws
+              uri: ${SHIPMENT_SERVICE_WS_URI:ws://localhost:8083}
+              predicates:
+                - Path=/ws/**
+              filters:
+                  - Authentication
 
             # ── NOTIFICATION SERVICE ──────────────────────────────
             - id: notification_service
