@@ -1,5 +1,20 @@
 server:
   port: ${PORT:8090}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    urls:
+      - name: Auth Service
+        url: /api-docs/auth
+      - name: Shipment Service
+        url: /api-docs/shipment
+      - name: Notification Service
+        url: /api-docs/notification
+
 spring:
   application:
     name: gateway
@@ -16,6 +31,11 @@ spring:
     fallback-to-system-locale: false
     default-locale: en
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   # Routes definition for services
   cloud:
     gateway:
@@ -24,10 +44,11 @@ spring:
           globalcors:
             cors-configurations:
               '[/**]':
-                allowedOrigins:
+                allowedOriginPatterns:
+                  - "http://localhost:[*]"
                   - "https://localhost:3000" # FE DOMAIN
                   - "https://admin.admindomain.com" # OTHER DOMAINS
-                allowedCredentials: true
+                allowCredentials: true
                 allowedHeaders: "*"
                 allowedMethods:
                   - GET
@@ -39,27 +60,76 @@ spring:
                   - PATCH
                   - TRACE
           routes:
-            # --Opened routes--
-            # AUTH SERVICE
+            # ──SWAGGER ──────────────────
+            - id: swagger_auth
+              uri: ${AUTH_SERVICE_URI:http://localhost:8085}
+              predicates:
+                - Path=/api-docs/auth
+              filters:
+                - RewritePath=/api-docs/auth, /v3/api-docs
+
+            - id: swagger_shipment
+              uri: ${SHIPMENT_SERVICE_URI:http://localhost:8083}
+              predicates:
+                - Path=/api-docs/shipment
+              filters:
+                - RewritePath=/api-docs/shipment, /v3/api-docs
+
+            - id: swagger_notification
+              uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8087}
+              predicates:
+                - Path=/api-docs/notification
+              filters:
+                - RewritePath=/api-docs/notification, /v3/api-docs
+            # ── AUTH SERVICE — opened routes──────────────────
             - id: auth_service_opened
               uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
                 - Path=/api/v1/auth/magic-link, /api/v1/auth/magic-link/verify, /api/v1/auth/refresh
                 - Method=POST,GET
               filters:
+                - Logging
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 20
+                    redis-rate-limiter.burstCapacity: 40
+                    key-resolver: "#{@ipKeyResolver}"
+                - name: Retry
+                  args:
+                    retries: 3
+                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
+                    methods: GET, POST
+                    backoff:
+                      firstBackoff: 100ms
+                      maxBackoff: 500ms
+                      factor: 2
                 - name: CircuitBreaker
                   args:
                     name: authOpenCircuitBreaker
                     fallbackUri: forward:/fallback/auth
 
-            # --Protected routes--
-            # AUTH SERVICE
+            # ── AUTH SERVICE — protected routes─────────────────
             - id: auth_service_protected
               uri: ${AUTH_SERVICE_URI:http://localhost:8085}
               predicates:
-                - Path=/api/v1/auth/logout, /api/v1/auth/refresh
+                - Path=/api/v1/auth/logout, /api/v1/users/**
               filters:
-                - Authentication  # Custom JWT validation filter (matches AuthenticationGatewayFilterFactory)
+                - Logging
+                - Authentication
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 20
+                    redis-rate-limiter.burstCapacity: 40
+                    key-resolver: "#{@ipKeyResolver}"
+                - name: Retry
+                  args:
+                    retries: 3
+                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
+                    methods: GET
+                    backoff:
+                      firstBackoff: 100ms
+                      maxBackoff: 500ms
+                      factor: 2
                 - name: AddResponseHeader
                   args:
                     name: X-Powered-By
@@ -69,9 +139,87 @@ spring:
                     name: authCircuitBreaker
                     fallbackUri: forward:/fallback/auth
 
+            # ── SHIPMENT SERVICE ─────────────────────────────────
+            - id: shipment_service
+              uri: ${SHIPMENT_SERVICE_URI:http://localhost:8083}
+              predicates:
+                - Path=/api/shipments/**, /api/moderator/shipments/**
+              filters:
+                - Logging
+                - Authentication
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 30
+                    redis-rate-limiter.burstCapacity: 60
+                    key-resolver: "#{@ipKeyResolver}"
+                - name: Retry
+                  args:
+                    retries: 3
+                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
+                    methods: GET
+                    backoff:
+                      firstBackoff: 100ms
+                      maxBackoff: 500ms
+                      factor: 2
+                - name: AddResponseHeader
+                  args:
+                    name: X-Powered-By
+                    value: me2u Gateway Service
+                - name: CircuitBreaker
+                  args:
+                    name: shipmentCircuitBreaker
+                    fallbackUri: forward:/fallback/shipment
+
+            # WebSocket ROUTE
+            - id: shipment-service-ws
+              uri: ${SHIPMENT_SERVICE_WS_URI:ws://localhost:8083}
+              predicates:
+                - Path=/ws/**
+              filters:
+                  - Authentication
+
+            # ── NOTIFICATION SERVICE ──────────────────────────────
+            - id: notification_service
+              uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8087}
+              predicates:
+                - Path=/api/notifications/**, /api/templates/**
+              filters:
+                - Logging
+                - Authentication
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 30
+                    redis-rate-limiter.burstCapacity: 60
+                    key-resolver: "#{@ipKeyResolver}"
+                - name: Retry
+                  args:
+                    retries: 3
+                    statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
+                    methods: GET
+                    backoff:
+                      firstBackoff: 100ms
+                      maxBackoff: 500ms
+                      factor: 2
+                - name: AddResponseHeader
+                  args:
+                    name: X-Powered-By
+                    value: me2u Gateway Service
+                - name: CircuitBreaker
+                  args:
+                    name: notificationCircuitBreaker
+                    fallbackUri: forward:/fallback/notification
+
 resilience4j:
   circuitbreaker:
     instances:
+      authOpenCircuitBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 80
+        eventConsumerBufferSize: 10
       authCircuitBreaker:
         registerHealthIndicator: true
         slidingWindowSize: 10
@@ -80,6 +228,29 @@ resilience4j:
         waitDurationInOpenState: 10s
         failureRateThreshold: 50
         eventConsumerBufferSize: 10
+      shipmentCircuitBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+      notificationCircuitBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+  retry:
+    instances:
+      default:
+        maxAttempts: 3
+        waitDuration: 100ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
 
 jwt:
   secret: ${JWT_SECRET}
@@ -90,6 +261,8 @@ logging:
     org.springframework.cloud.gateway.handler.RoutePredicateHandlerMapping: DEBUG
     # Show circuit breaker state transitions and call outcomes
     io.github.resilience4j.circuitbreaker.internal.CircuitBreakerStateMachine: DEBUG
+    com.me2u.gateway.filter: DEBUG
+
 management:
   endpoints:
     web:

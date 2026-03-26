@@ -14,6 +14,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import org.springframework.web.cors.reactive.CorsUtils;
 
 @Slf4j
 @Component
@@ -30,6 +31,10 @@ public class AuthenticationFilter implements GatewayFilter {
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
     try {
       String token = extractToken(exchange);
+
+      if (CorsUtils.isPreFlightRequest(exchange.getRequest())) {
+        return chain.filter(exchange);
+      }
 
       if (token == null || !jwtUtil.validateToken(token)) {
         return handleAuthenticationFailure(exchange);
