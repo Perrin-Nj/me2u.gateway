@@ -36,6 +36,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+  # Routes definition for services
   cloud:
     gateway:
       server:
@@ -256,7 +257,9 @@ jwt:
 
 logging:
   level:
+    # Show which route predicate matches and the final route selected
     org.springframework.cloud.gateway.handler.RoutePredicateHandlerMapping: DEBUG
+    # Show circuit breaker state transitions and call outcomes
     io.github.resilience4j.circuitbreaker.internal.CircuitBreakerStateMachine: DEBUG
     com.me2u.gateway.filter: DEBUG
 
